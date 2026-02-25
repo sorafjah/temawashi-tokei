@@ -2,7 +2,7 @@
 <html lang="ja">
 <head>
 <meta charset="UTF-8" />
-<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
 <title>時計表示（タッチ＆ドラムロール対応）</title>
 <link href="https://cdn.jsdelivr.net/npm/tailwindcss@2.2.19/dist/tailwind.min.css" rel="stylesheet">
 <style>
@@ -11,6 +11,7 @@
     text-align: center;
     background-color: #ffffff;
     overscroll-behavior-y: none; /* スワイプ時のブラウザのリロード等を防ぐ */
+    touch-action: manipulation; /* ダブルタップによるズームを無効化し、ピンチズームは許可 */
   }
   
   #clock-svg-container {
@@ -51,22 +52,22 @@
   </div>
 
   <!-- デジタル時計・ドラムロール風UI（下） -->
-  <div id="digital-clock" class="flex items-center justify-center space-x-6 mt-2">
+  <div id="digital-clock" class="flex items-center justify-center space-x-4 mt-2">
     <!-- 時間（Hour）カラム -->
-    <div class="drum-roll flex flex-col items-center justify-center h-32 w-16 touch-none no-tap-highlight" id="hour-column">
-      <div id="hour-prev" class="text-2xl text-gray-300 py-1 cursor-pointer transition-colors hover:text-gray-500">05</div>
-      <div id="hour-curr" class="text-6xl font-bold text-gray-800 py-1">06</div>
-      <div id="hour-next" class="text-2xl text-gray-300 py-1 cursor-pointer transition-colors hover:text-gray-500">07</div>
+    <div class="drum-roll flex flex-col items-center justify-center h-24 w-14 touch-none no-tap-highlight" id="hour-column">
+      <div id="hour-prev" class="text-xl text-gray-300 py-1 cursor-pointer transition-colors hover:text-gray-500">5</div>
+      <div id="hour-curr" class="text-5xl font-bold text-gray-800 py-1">6</div>
+      <div id="hour-next" class="text-xl text-gray-300 py-1 cursor-pointer transition-colors hover:text-gray-500">7</div>
     </div>
     
     <!-- コロン -->
-    <div class="text-4xl font-bold text-gray-400 pb-2">:</div>
+    <div class="text-3xl font-bold text-gray-400 pb-2">:</div>
     
     <!-- 分（Minute）カラム -->
-    <div class="drum-roll flex flex-col items-center justify-center h-32 w-16 touch-none no-tap-highlight" id="minute-column">
-      <div id="minute-prev" class="text-2xl text-gray-300 py-1 cursor-pointer transition-colors hover:text-gray-500">29</div>
-      <div id="minute-curr" class="text-6xl font-bold text-gray-800 py-1">30</div>
-      <div id="minute-next" class="text-2xl text-gray-300 py-1 cursor-pointer transition-colors hover:text-gray-500">31</div>
+    <div class="drum-roll flex flex-col items-center justify-center h-24 w-14 touch-none no-tap-highlight" id="minute-column">
+      <div id="minute-prev" class="text-xl text-gray-300 py-1 cursor-pointer transition-colors hover:text-gray-500">29</div>
+      <div id="minute-curr" class="text-5xl font-bold text-gray-800 py-1">30</div>
+      <div id="minute-next" class="text-xl text-gray-300 py-1 cursor-pointer transition-colors hover:text-gray-500">31</div>
     </div>
   </div>
 
@@ -191,9 +192,9 @@
     // 1. デジタル時計（ドラムロール）の更新
     const hPrev = (currentHour - 1 + 24) % 24;
     const hNext = (currentHour + 1) % 24;
-    document.getElementById('hour-prev').textContent = String(hPrev).padStart(2, '0');
-    document.getElementById('hour-curr').textContent = String(currentHour).padStart(2, '0');
-    document.getElementById('hour-next').textContent = String(hNext).padStart(2, '0');
+    document.getElementById('hour-prev').textContent = String(hPrev);
+    document.getElementById('hour-curr').textContent = String(currentHour);
+    document.getElementById('hour-next').textContent = String(hNext);
 
     const mPrev = (currentMinute - 1 + 60) % 60;
     const mNext = (currentMinute + 1) % 60;
