@@ -2,7 +2,7 @@
 <html lang="ja">
 <head>
 <meta charset="UTF-8" />
-<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
 <title>時計表示（タッチ＆ドラムロール対応）</title>
 <link href="https://cdn.jsdelivr.net/npm/tailwindcss@2.2.19/dist/tailwind.min.css" rel="stylesheet">
 <style>
@@ -10,8 +10,7 @@
     font-family: "Inter", sans-serif;
     text-align: center;
     background-color: #ffffff;
-    overscroll-behavior-y: none; /* スワイプ時のブラウザのリロード等を防ぐ */
-    touch-action: manipulation; /* ダブルタップによるズームを無効化し、ピンチズームは許可 */
+    overscroll-behavior-y: none; /* スワイプ時の余計な動きを防ぐ */
   }
   
   #clock-svg-container {
@@ -21,20 +20,23 @@
   }
   
   svg {
-    max-width: 300px;
+    max-width: 320px; /* アナログ時計は少し大きめに確保 */
     height: auto;
-    touch-action: none;
+    touch-action: none; /* 時計上でのスクロール・ズームを無効化 */
     cursor: pointer;
     border-radius: 50%;
   }
 
-  /* ドラムロール風のUIにするための上下グラデーションマスク */
+  /* ドラムロールUI。 touch-action: none でスクロールを完全に防ぐ */
   .drum-roll {
     mask-image: linear-gradient(to bottom, transparent 0%, black 25%, black 75%, transparent 100%);
     -webkit-mask-image: linear-gradient(to bottom, transparent 0%, black 25%, black 75%, transparent 100%);
+    touch-action: none; 
+    user-select: none;
+    -webkit-user-select: none;
   }
 
-  /* タッチ時のハイライトを消す */
+  /* タッチ時のグレーのハイライトを消す */
   .no-tap-highlight {
     -webkit-tap-highlight-color: transparent;
   }
@@ -42,38 +44,49 @@
 </head>
 <body class="flex flex-col items-center justify-center min-h-screen select-none">
 
-<div id="app" class="p-8 max-w-md w-full flex flex-col items-center">
+<div id="app" class="p-4 max-w-md w-full flex flex-col items-center">
   
   <!-- アナログ時計（上） -->
-  <div id="clock-display" class="mb-6 w-full">
+  <div id="clock-display" class="mb-4 w-full">
     <div id="clock-svg-container">
       <!-- 時計SVGがここに入る -->
     </div>
   </div>
 
   <!-- デジタル時計・ドラムロール風UI（下） -->
-  <div id="digital-clock" class="flex items-center justify-center space-x-4 mt-2">
+  <!-- 全体的にサイズダウンし、主張を抑える -->
+  <div id="digital-clock" class="flex items-center justify-center space-x-2 mt-2">
     <!-- 時間（Hour）カラム -->
-    <div class="drum-roll flex flex-col items-center justify-center h-24 w-14 touch-none no-tap-highlight" id="hour-column">
-      <div id="hour-prev" class="text-xl text-gray-300 py-1 cursor-pointer transition-colors hover:text-gray-500">5</div>
-      <div id="hour-curr" class="text-5xl font-bold text-gray-800 py-1">6</div>
-      <div id="hour-next" class="text-xl text-gray-300 py-1 cursor-pointer transition-colors hover:text-gray-500">7</div>
+    <div class="drum-roll flex flex-col items-center justify-center h-20 w-12 no-tap-highlight cursor-pointer" id="hour-column">
+      <div id="hour-prev" class="text-sm text-gray-300 py-1 transition-colors hover:text-gray-500">5</div>
+      <div id="hour-curr" class="text-3xl font-bold text-gray-800 py-1">6</div>
+      <div id="hour-next" class="text-sm text-gray-300 py-1 transition-colors hover:text-gray-500">7</div>
     </div>
     
     <!-- コロン -->
-    <div class="text-3xl font-bold text-gray-400 pb-2">:</div>
+    <div class="text-2xl font-bold text-gray-400 pb-1">:</div>
     
     <!-- 分（Minute）カラム -->
-    <div class="drum-roll flex flex-col items-center justify-center h-24 w-14 touch-none no-tap-highlight" id="minute-column">
-      <div id="minute-prev" class="text-xl text-gray-300 py-1 cursor-pointer transition-colors hover:text-gray-500">29</div>
-      <div id="minute-curr" class="text-5xl font-bold text-gray-800 py-1">30</div>
-      <div id="minute-next" class="text-xl text-gray-300 py-1 cursor-pointer transition-colors hover:text-gray-500">31</div>
+    <div class="drum-roll flex flex-col items-center justify-center h-20 w-12 no-tap-highlight cursor-pointer" id="minute-column">
+      <div id="minute-prev" class="text-sm text-gray-300 py-1 transition-colors hover:text-gray-500">29</div>
+      <div id="minute-curr" class="text-3xl font-bold text-gray-800 py-1">30</div>
+      <div id="minute-next" class="text-sm text-gray-300 py-1 transition-colors hover:text-gray-500">31</div>
     </div>
   </div>
 
 </div>
 
 <script>
+  // ダブルタップによる意図しないズームを強制ブロックするハック
+  let lastTouchEnd = 0;
+  document.addEventListener('touchend', (event) => {
+    const now = (new Date()).getTime();
+    if (now - lastTouchEnd <= 300) {
+      event.preventDefault(); // 300ミリ秒以内の連続タップは無効化
+    }
+    lastTouchEnd = now;
+  }, { passive: false });
+
   // DOM要素の取得
   const clockSvgContainer = document.getElementById("clock-svg-container");
   
@@ -88,7 +101,7 @@
   const svgNS = "http://www.w3.org/2000/svg";
 
   let svg, hourHand, minuteHand;
-  let isDragging = false;
+  let isDraggingClock = false;
   let previousMinute = null;
 
   /**
@@ -99,7 +112,7 @@
     svg.setAttribute("viewBox", "0 0 300 300");
     svg.setAttribute("width", "300");
     svg.setAttribute("height", "300");
-    svg.setAttribute("class", "bg-white");
+    svg.setAttribute("class", "bg-white no-tap-highlight");
 
     // 時計の外円
     const circle = document.createElementNS(svgNS, "circle");
@@ -120,7 +133,7 @@
       text.setAttribute("x", x);
       text.setAttribute("y", y);
       text.setAttribute("text-anchor", "middle");
-      text.setAttribute("font-size", "20");
+      text.setAttribute("font-size", "22");
       text.setAttribute("fill", "#333");
       text.setAttribute("pointer-events", "none");
       text.textContent = i;
@@ -179,10 +192,10 @@
     clockSvgContainer.appendChild(svg);
 
     // タッチ・マウスイベント登録（アナログ時計用）
-    svg.addEventListener("pointerdown", handlePointerDown);
-    svg.addEventListener("pointermove", handlePointerMove);
-    svg.addEventListener("pointerup", handlePointerUp);
-    svg.addEventListener("pointercancel", handlePointerUp);
+    svg.addEventListener("pointerdown", handleClockPointerDown);
+    svg.addEventListener("pointermove", handleClockPointerMove);
+    svg.addEventListener("pointerup", handleClockPointerUp);
+    svg.addEventListener("pointercancel", handleClockPointerUp);
   }
 
   /**
@@ -219,19 +232,19 @@
   }
 
   // --- アナログ時計のドラッグ操作ロジック ---
-  function handlePointerDown(e) {
-    isDragging = true;
-    svg.setPointerCapture(e.pointerId);
+  function handleClockPointerDown(e) {
+    isDraggingClock = true;
+    svg.setPointerCapture(e.pointerId); // 指が外れても追跡
     calculateTimeFromPointer(e);
   }
 
-  function handlePointerMove(e) {
-    if (!isDragging) return;
+  function handleClockPointerMove(e) {
+    if (!isDraggingClock) return;
     calculateTimeFromPointer(e);
   }
 
-  function handlePointerUp(e) {
-    isDragging = false;
+  function handleClockPointerUp(e) {
+    isDraggingClock = false;
     previousMinute = null; 
     svg.releasePointerCapture(e.pointerId);
   }
@@ -269,68 +282,50 @@
     updateDisplay();
   }
 
-  // --- デジタル時計のドラムロール操作ロジック ---
+  // --- デジタル時計の「指が外れても追跡する」ドラム操作 ---
   function setupDigitalClockEvents() {
-    // タップ（クリック）で上下の数字を選択
-    document.getElementById('hour-prev').addEventListener('click', () => {
-      currentHour = (currentHour - 1 + 24) % 24;
-      updateDisplay();
-    });
-    document.getElementById('hour-next').addEventListener('click', () => {
-      currentHour = (currentHour + 1) % 24;
-      updateDisplay();
-    });
-    document.getElementById('minute-prev').addEventListener('click', () => {
-      currentMinute = (currentMinute - 1 + 60) % 60;
-      updateDisplay();
-    });
-    document.getElementById('minute-next').addEventListener('click', () => {
-      currentMinute = (currentMinute + 1) % 60;
-      updateDisplay();
-    });
-
-    // スワイプ操作（スマホ用）
-    setupSwipe('hour-column', true);
-    setupSwipe('minute-column', false);
+    setupDrum('hour-column', true);
+    setupDrum('minute-column', false);
     
     // マウスホイール操作（PC用）
-    document.getElementById('hour-column').addEventListener('wheel', (e) => handleWheel(e, true));
-    document.getElementById('minute-column').addEventListener('wheel', (e) => handleWheel(e, false));
+    document.getElementById('hour-column').addEventListener('wheel', (e) => handleWheel(e, true), {passive: false});
+    document.getElementById('minute-column').addEventListener('wheel', (e) => handleWheel(e, false), {passive: false});
   }
 
-  // マウスホイールで数字を変える
-  function handleWheel(e, isHour) {
-    e.preventDefault();
-    const direction = e.deltaY > 0 ? 1 : -1;
-    if (isHour) {
-      currentHour = (currentHour + direction + 24) % 24;
-    } else {
-      currentMinute = (currentMinute + direction + 60) % 60;
-    }
-    updateDisplay();
-  }
-
-  // スワイプ（指の上下移動）で数字を変える
-  function setupSwipe(columnId, isHour) {
+  // なぞる操作（ポインターイベント）のセットアップ
+  function setupDrum(columnId, isHour) {
     const el = document.getElementById(columnId);
-    let lastY = 0;
+    let isDraggingDrum = false;
+    let startY = 0;
     let accumulatedDelta = 0;
+    let hasMoved = false; // クリック判定用
 
-    el.addEventListener('touchstart', (e) => {
-      lastY = e.touches[0].clientY;
+    el.addEventListener('pointerdown', (e) => {
+      isDraggingDrum = true;
+      hasMoved = false;
+      startY = e.clientY;
       accumulatedDelta = 0;
-    }, { passive: true });
+      el.setPointerCapture(e.pointerId); // ★指が枠から出ても追跡する魔法のコード
+    });
 
-    el.addEventListener('touchmove', (e) => {
-      const currentY = e.touches[0].clientY;
-      const deltaY = currentY - lastY;
-      lastY = currentY;
+    el.addEventListener('pointermove', (e) => {
+      if (!isDraggingDrum) return;
+      
+      const currentY = e.clientY;
+      const deltaY = currentY - startY;
+      
+      // わずかなブレは移動とみなさない
+      if (Math.abs(deltaY) > 2) {
+        hasMoved = true;
+      }
+      
+      startY = currentY;
       accumulatedDelta += deltaY;
 
-      // 15pxスワイプするごとに数字を1つ進める/戻す
-      if (Math.abs(accumulatedDelta) >= 15) {
-        const steps = Math.floor(Math.abs(accumulatedDelta) / 15);
-        const direction = accumulatedDelta > 0 ? -1 : 1; // 下にスワイプ(>0)で数字が減る（前の数字へ）
+      // 12px 動くごとに1つ数字を変える（感度調整）
+      if (Math.abs(accumulatedDelta) >= 12) {
+        const steps = Math.floor(Math.abs(accumulatedDelta) / 12);
+        const direction = accumulatedDelta > 0 ? -1 : 1; // 下になぞると数字が減る
         
         for(let i=0; i<steps; i++){
             if (isHour) {
@@ -339,14 +334,50 @@
               currentMinute = (currentMinute + direction + 60) % 60;
             }
         }
-        accumulatedDelta = accumulatedDelta % 15;
-        updateDisplay();
         
-        if (e.cancelable) {
-          e.preventDefault(); // 画面全体のスクロールを防ぐ
-        }
+        // 余り分を保持して滑らかさを保つ
+        accumulatedDelta = accumulatedDelta > 0 ? accumulatedDelta % 12 : -(-accumulatedDelta % 12);
+        updateDisplay();
       }
-    }, { passive: false });
+    });
+
+    const endDrag = (e) => {
+      if (!isDraggingDrum) return;
+      isDraggingDrum = false;
+      el.releasePointerCapture(e.pointerId);
+
+      // 動かさずに指を離した場合は「タップ（クリック）」とみなして上下の数字を進める
+      if (!hasMoved) {
+        // 要素内のクリック位置（上半分か下半分か）を判定
+        const rect = el.getBoundingClientRect();
+        const clickY = e.clientY - rect.top;
+        if (clickY < rect.height / 2) {
+          // 上半分をタップ（前の数字へ）
+          if (isHour) currentHour = (currentHour - 1 + 24) % 24;
+          else currentMinute = (currentMinute - 1 + 60) % 60;
+        } else {
+          // 下半分をタップ（次の数字へ）
+          if (isHour) currentHour = (currentHour + 1) % 24;
+          else currentMinute = (currentMinute + 1) % 60;
+        }
+        updateDisplay();
+      }
+    };
+
+    el.addEventListener('pointerup', endDrag);
+    el.addEventListener('pointercancel', endDrag);
+  }
+
+  // マウスホイールで数字を変える
+  function handleWheel(e, isHour) {
+    e.preventDefault(); // 画面スクロールを防ぐ
+    const direction = e.deltaY > 0 ? 1 : -1;
+    if (isHour) {
+      currentHour = (currentHour + direction + 24) % 24;
+    } else {
+      currentMinute = (currentMinute + direction + 60) % 60;
+    }
+    updateDisplay();
   }
 
   // ページ読み込み時の初期化
