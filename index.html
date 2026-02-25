@@ -1,0 +1,293 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>時計表示（タッチ対応）</title>
+<link href="https://cdn.jsdelivr.net/npm/tailwindcss@2.2.19/dist/tailwind.min.css" rel="stylesheet">
+<style>
+  body {
+    font-family: "Inter", sans-serif;
+    text-align: center;
+    padding: 20px;
+    user-select: none;
+    background-color: #ffffff; /* 背景を白にして影や線をなくす */
+  }
+  #input-section, #clock-display {
+    margin: 20px auto;
+  }
+  /* ネイティブのタイムピッカーを少し大きめに表示 */
+  input[type="time"] {
+    font-size: 2.5rem;
+    padding: 10px;
+    border: none;
+    background: transparent;
+    cursor: pointer;
+    outline: none;
+    font-weight: bold;
+    color: #333;
+  }
+  #clock-svg-container {
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    margin-top: 20px;
+  }
+  svg {
+    max-width: 300px;
+    height: auto;
+    /* タッチ操作時のデフォルトアクション（スクロール等）を防ぐ */
+    touch-action: none;
+    cursor: pointer;
+    border-radius: 50%;
+  }
+</style>
+</head>
+<body class="flex flex-col items-center justify-center min-h-screen">
+
+<div id="app" class="p-8 max-w-md w-full">
+  
+  <div id="input-section" class="mb-4">
+    <p class="text-sm mb-2 text-gray-500">直接入力するか、時計の針を回せます</p>
+    
+    <!-- スマホではタップするとルーレット（ピッカー）が出るUI -->
+    <div class="flex items-center justify-center">
+      <input type="time" id="time-input" value="06:30" required>
+    </div>
+    
+    <div class="flex justify-center mt-2">
+        <!-- 目立たないようにテキストリンク風に変更 -->
+        <button id="display-clock-button" class="text-xs text-gray-400 hover:text-gray-600 underline focus:outline-none">
+          入力を反映
+        </button>
+    </div>
+    <div id="error-message" class="text-red-500 text-sm mt-2 h-5"></div>
+  </div>
+
+  <div id="clock-display">
+    <div id="clock-svg-container">
+      <!-- 時計SVGがここに入る -->
+    </div>
+  </div>
+</div>
+
+<script>
+  // DOM要素の取得
+  const timeInput = document.getElementById("time-input");
+  const displayClockButton = document.getElementById("display-clock-button");
+  const clockSvgContainer = document.getElementById("clock-svg-container");
+  const errorMessageDiv = document.getElementById("error-message");
+
+  // 時計の描画に必要な定数
+  const radius = 120;
+  const centerX = 150;
+  const centerY = 150;
+  const svgNS = "http://www.w3.org/2000/svg";
+
+  let svg, hourHand, minuteHand;
+  let isDragging = false;
+  let previousMinute = null;
+
+  /**
+   * 時計のベースを作成
+   */
+  function initClock() {
+    svg = document.createElementNS(svgNS, "svg");
+    svg.setAttribute("viewBox", "0 0 300 300");
+    svg.setAttribute("width", "300");
+    svg.setAttribute("height", "300");
+    // 影(shadow-md)を削除
+    svg.setAttribute("class", "bg-white");
+
+    // 時計の外円
+    const circle = document.createElementNS(svgNS, "circle");
+    circle.setAttribute("cx", centerX);
+    circle.setAttribute("cy", centerY);
+    circle.setAttribute("r", radius);
+    circle.setAttribute("stroke", "black");
+    circle.setAttribute("stroke-width", "3");
+    circle.setAttribute("fill", "white");
+    svg.appendChild(circle);
+
+    // 文字盤の数字 (1-12)
+    for(let i = 1; i <= 12; i++) {
+      const angle = (i * 30 - 90) * Math.PI / 180;
+      const x = centerX + (radius - 30) * Math.cos(angle);
+      const y = centerY + (radius - 30) * Math.sin(angle) + 6;
+      const text = document.createElementNS(svgNS, "text");
+      text.setAttribute("x", x);
+      text.setAttribute("y", y);
+      text.setAttribute("text-anchor", "middle");
+      text.setAttribute("font-size", "20");
+      text.setAttribute("fill", "#333");
+      text.setAttribute("pointer-events", "none");
+      text.textContent = i;
+      svg.appendChild(text);
+    }
+
+    // 分目盛り (60個)
+    for(let i = 0; i < 60; i++) {
+      const angle = (i * 6 - 90) * Math.PI / 180;
+      const innerRadius = (i % 5 === 0) ? radius - 15 : radius - 8;
+      const outerX = centerX + radius * Math.cos(angle);
+      const outerY = centerY + radius * Math.sin(angle);
+      const innerX = centerX + innerRadius * Math.cos(angle);
+      const innerY = centerY + innerRadius * Math.sin(angle);
+
+      const line = document.createElementNS(svgNS, "line");
+      line.setAttribute("x1", innerX);
+      line.setAttribute("y1", innerY);
+      line.setAttribute("x2", outerX);
+      line.setAttribute("y2", outerY);
+      line.setAttribute("stroke", "black");
+      line.setAttribute("stroke-width", (i % 5 === 0) ? 2 : 1);
+      line.setAttribute("pointer-events", "none");
+      svg.appendChild(line);
+    }
+
+    // 時針
+    hourHand = document.createElementNS(svgNS, "line");
+    hourHand.setAttribute("x1", centerX);
+    hourHand.setAttribute("y1", centerY);
+    hourHand.setAttribute("stroke", "#333");
+    hourHand.setAttribute("stroke-width", 6);
+    hourHand.setAttribute("stroke-linecap", "round");
+    hourHand.setAttribute("pointer-events", "none");
+    svg.appendChild(hourHand);
+
+    // 分針（色を黒に変更）
+    minuteHand = document.createElementNS(svgNS, "line");
+    minuteHand.setAttribute("x1", centerX);
+    minuteHand.setAttribute("y1", centerY);
+    minuteHand.setAttribute("stroke", "#333"); 
+    minuteHand.setAttribute("stroke-width", 4);
+    minuteHand.setAttribute("stroke-linecap", "round");
+    minuteHand.setAttribute("pointer-events", "none");
+    svg.appendChild(minuteHand);
+
+    // 中心点
+    const centerDot = document.createElementNS(svgNS, "circle");
+    centerDot.setAttribute("cx", centerX);
+    centerDot.setAttribute("cy", centerY);
+    centerDot.setAttribute("r", 6);
+    centerDot.setAttribute("fill", "#333");
+    centerDot.setAttribute("pointer-events", "none");
+    svg.appendChild(centerDot);
+
+    clockSvgContainer.appendChild(svg);
+
+    // タッチ・マウスイベント登録
+    svg.addEventListener("pointerdown", handlePointerDown);
+    svg.addEventListener("pointermove", handlePointerMove);
+    svg.addEventListener("pointerup", handlePointerUp);
+    svg.addEventListener("pointercancel", handlePointerUp);
+  }
+
+  /**
+   * 時計の針を更新
+   */
+  function updateClockHands(hour24, minute) {
+    if (!hourHand || !minuteHand) return;
+
+    // 12時間表記の角度に変換
+    const hourAngle = ((hour24 % 12) + minute / 60) * 30 - 90;
+    const hourX = centerX + (radius * 0.5) * Math.cos(hourAngle * Math.PI / 180);
+    const hourY = centerY + (radius * 0.5) * Math.sin(hourAngle * Math.PI / 180);
+    hourHand.setAttribute("x2", hourX);
+    hourHand.setAttribute("y2", hourY);
+
+    const minuteAngle = minute * 6 - 90;
+    const minuteX = centerX + (radius * 0.75) * Math.cos(minuteAngle * Math.PI / 180);
+    const minuteY = centerY + (radius * 0.75) * Math.sin(minuteAngle * Math.PI / 180);
+    minuteHand.setAttribute("x2", minuteX);
+    minuteHand.setAttribute("y2", minuteY);
+  }
+
+  function handlePointerDown(e) {
+    isDragging = true;
+    errorMessageDiv.textContent = "";
+    svg.setPointerCapture(e.pointerId);
+    calculateTimeFromPointer(e);
+  }
+
+  function handlePointerMove(e) {
+    if (!isDragging) return;
+    calculateTimeFromPointer(e);
+  }
+
+  function handlePointerUp(e) {
+    isDragging = false;
+    previousMinute = null; 
+    svg.releasePointerCapture(e.pointerId);
+  }
+
+  function calculateTimeFromPointer(e) {
+    e.preventDefault();
+
+    const pt = svg.createSVGPoint();
+    pt.x = e.clientX;
+    pt.y = e.clientY;
+    const loc = pt.matrixTransform(svg.getScreenCTM().inverse());
+    
+    const dx = loc.x - centerX;
+    const dy = loc.y - centerY;
+    
+    let angle = Math.atan2(dy, dx) * 180 / Math.PI;
+    angle = (angle + 90) % 360;
+    if (angle < 0) angle += 360;
+    
+    let newMinute = Math.round(angle / 6) % 60;
+    
+    // 現在の入力欄から時間を取得
+    let timeParts = timeInput.value.split(":");
+    let currentHour24 = parseInt(timeParts[0]);
+    if (isNaN(currentHour24)) currentHour24 = 6;
+    
+    // 分をまたいだ時の時間変更ロジック
+    if (previousMinute !== null) {
+        if (previousMinute >= 45 && newMinute <= 15) {
+            currentHour24 = (currentHour24 + 1) % 24;
+        } 
+        else if (previousMinute <= 15 && newMinute >= 45) {
+            currentHour24 = (currentHour24 - 1 + 24) % 24;
+        }
+    }
+    
+    previousMinute = newMinute;
+    
+    // 入力欄を更新 "HH:mm" フォーマット
+    const formattedHour = String(currentHour24).padStart(2, '0');
+    const formattedMinute = String(newMinute).padStart(2, '0');
+    timeInput.value = `${formattedHour}:${formattedMinute}`;
+    
+    // 針を更新
+    updateClockHands(currentHour24, newMinute);
+  }
+
+  // 入力欄を手動で変えた時、リアルタイムに時計へ反映する
+  timeInput.addEventListener("input", syncClockFromInput);
+
+  // 反映ボタン（念のため残しつつ、処理は input イベントと同じ）
+  displayClockButton.addEventListener("click", syncClockFromInput);
+
+  function syncClockFromInput() {
+    if (!timeInput.value) return;
+    const timeParts = timeInput.value.split(":");
+    const hour = parseInt(timeParts[0]);
+    const minute = parseInt(timeParts[1]);
+
+    if (!isNaN(hour) && !isNaN(minute)) {
+      errorMessageDiv.textContent = "";
+      updateClockHands(hour, minute);
+    }
+  }
+
+  // ページ読み込み時
+  window.onload = () => {
+      initClock();
+      syncClockFromInput();
+  };
+</script>
+
+</body>
+</html>
