@@ -40,9 +40,101 @@
   .no-tap-highlight {
     -webkit-tap-highlight-color: transparent;
   }
+
+  /* ===== 使い方ポップアップ ===== */
+  #howto-overlay {
+    position: fixed;
+    inset: 0;
+    background: rgba(0,0,0,0.35);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    z-index: 50;
+    touch-action: none;
+  }
+  #howto-overlay.closed {
+    display: none;
+  }
+  #howto-modal {
+    background: #ffffff;
+    border-radius: 16px;
+    padding: 22px 24px;
+    max-width: 340px;
+    width: 88%;
+    box-shadow: 0 6px 20px rgba(0,0,0,0.2);
+    text-align: left;
+    touch-action: auto;
+  }
+  #howto-modal h2 {
+    font-size: 17px;
+    font-weight: bold;
+    color: #222;
+    margin-bottom: 10px;
+  }
+  #howto-modal p {
+    font-size: 14px;
+    line-height: 1.8;
+    color: #333;
+    margin: 0 0 6px 0;
+  }
+  #howto-close {
+    margin-top: 14px;
+    width: 100%;
+    min-height: 44px;
+    border-radius: 10px;
+    background: #f3f4f6;
+    border: 1px solid #d1d5db;
+    font-size: 15px;
+    color: #333;
+    touch-action: manipulation;
+  }
+  #howto-close:active {
+    background: #e5e7eb;
+  }
+
+  /* ===== デジタル表示・切り替えボタン（左上・枠なし・控えめ） ===== */
+  #digital-toggle-btn {
+    position: fixed;
+    top: 10px;
+    left: 10px;
+    width: 44px;
+    height: 44px;
+    min-width: 44px;
+    min-height: 44px;
+    background: transparent;
+    border: none;
+    font-size: 26px;
+    font-weight: bold;
+    line-height: 1;
+    color: rgba(120,120,120,0.5);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    touch-action: manipulation;
+    -webkit-user-select: none;
+    user-select: none;
+    z-index: 20;
+  }
+  #digital-toggle-btn:active {
+    color: rgba(90,90,90,0.75);
+  }
 </style>
 </head>
 <body class="flex flex-col items-center justify-center min-h-screen select-none">
+
+<!-- 使い方ポップアップ（最初に一度だけ表示） -->
+<div id="howto-overlay">
+  <div id="howto-modal">
+    <h2>つかいかた</h2>
+    <p>・上のアナログ時計は、針を指でドラッグすると時刻を変更できます。</p>
+    <p>・下のデジタル表示は、数字を上下になぞる、またはタップすると時・分を変更できます。</p>
+    <p>・画面左上のボタンで、デジタル表示の表示・非表示を切り替えられます。</p>
+    <button id="howto-close" class="no-tap-highlight">閉じる</button>
+  </div>
+</div>
+
+<!-- デジタル表示 切り替えボタン（左上） -->
+<button id="digital-toggle-btn" class="no-tap-highlight" aria-label="デジタル表示の切り替え">－</button>
 
 <div id="app" class="p-4 max-w-md w-full flex flex-col items-center">
   
@@ -54,7 +146,6 @@
   </div>
 
   <!-- デジタル時計・ドラムロール風UI（下） -->
-  <!-- 全体的にサイズダウンし、主張を抑える -->
   <div id="digital-clock" class="flex items-center justify-center space-x-2 mt-2">
     <!-- 時間（Hour）カラム -->
     <div class="drum-roll flex flex-col items-center justify-center h-20 w-12 no-tap-highlight cursor-pointer" id="hour-column">
@@ -64,7 +155,7 @@
     </div>
     
     <!-- コロン -->
-    <div class="text-2xl font-bold text-gray-400 pb-1">:</div>
+    <div class="text-2xl font-bold pb-1" style="color:#000;">:</div>
     
     <!-- 分（Minute）カラム -->
     <div class="drum-roll flex flex-col items-center justify-center h-20 w-12 no-tap-highlight cursor-pointer" id="minute-column">
@@ -380,10 +471,45 @@
     updateDisplay();
   }
 
+  // --- デジタル表示の切り替えボタン ---
+  function setupDigitalToggle() {
+    const toggleBtn = document.getElementById('digital-toggle-btn');
+    const digitalClock = document.getElementById('digital-clock');
+    let isVisible = true;
+
+    toggleBtn.addEventListener('click', () => {
+      isVisible = !isVisible;
+      digitalClock.style.display = isVisible ? 'flex' : 'none';
+      toggleBtn.textContent = isVisible ? '－' : '＋';
+      toggleBtn.setAttribute('aria-label', isVisible ? 'デジタル表示をかくす' : 'デジタル表示をだす');
+    });
+  }
+
+  // --- 使い方ポップアップの開閉 ---
+  function setupHowtoPopup() {
+    const overlay = document.getElementById('howto-overlay');
+    const closeBtn = document.getElementById('howto-close');
+
+    const closePopup = () => {
+      overlay.classList.add('closed');
+    };
+
+    closeBtn.addEventListener('click', closePopup);
+
+    // 背景（モーダルの外側）をタップしても閉じる
+    overlay.addEventListener('click', (e) => {
+      if (e.target === overlay) {
+        closePopup();
+      }
+    });
+  }
+
   // ページ読み込み時の初期化
   window.onload = () => {
       initClock();
       setupDigitalClockEvents();
+      setupDigitalToggle();
+      setupHowtoPopup();
       updateDisplay();
   };
 </script>
